@@ -16,6 +16,18 @@ from store.models import (
 
 fake = Faker()
 
+PRODUCT_CATEGORIES = {
+    "Electronics": ["Smartphone", "Laptop", "Headphones", "Smartwatch", "Bluetooth Speaker"],
+    "Clothing": ["T-Shirt", "Jeans", "Sneakers", "Jacket", "Dress"],
+    "Home Appliances": ["Microwave", "Blender", "Coffee Maker", "Vacuum Cleaner", "Air Fryer"],
+}
+
+PROMO_TEMPLATES = [
+    "Save {discount}% on all {category}!",
+    "{discount}% off this week only!",
+    "Flash Sale – {discount}% discount on {category}!",
+]
+
 def create_customers(n=10):
     customers = []
     for _ in range(n):
@@ -23,7 +35,8 @@ def create_customers(n=10):
             first_name=fake.first_name(),
             last_name=fake.last_name(),
             email=fake.unique.email(),
-            phone=fake.random_int(min=100000000, max=999999999),
+            # ✅ numeric phone since your model expects an IntegerField
+            phone=fake.random_int(min=700000000, max=799999999),  # e.g. Kenyan format 07xx...
             birth_date=fake.date_of_birth(minimum_age=18, maximum_age=60),
             membership=random.choice([
                 Customer.MEMBERSHIP_BASIC,
@@ -44,40 +57,42 @@ def create_customers(n=10):
 def create_promotions(n=5):
     promotions = []
     for _ in range(n):
+        discount = random.randint(5, 50)
+        category = random.choice(list(PRODUCT_CATEGORIES.keys()))
         promo = Promotion.objects.create(
-            description=fake.sentence(),
-            discount=round(random.uniform(5, 50), 2)
+            description=random.choice(PROMO_TEMPLATES).format(discount=discount, category=category),
+            discount=discount
         )
         promotions.append(promo)
     print(f"✅ Created {n} promotions")
     return promotions
 
-def create_collections(n=3):
+def create_collections():
     collections = []
-    for _ in range(n):
-        coll = Collection.objects.create(
-            title=fake.word()
-        )
+    for category in PRODUCT_CATEGORIES.keys():
+        coll = Collection.objects.create(title=category)
         collections.append(coll)
-    print(f"✅ Created {n} collections")
+    print(f"✅ Created {len(collections)} collections")
     return collections
 
-def create_products(n=20, promotions=None, collections=None):
+def create_products(promotions=None, collections=None):
     products = []
-    for _ in range(n):
-        coll = random.choice(collections) if collections else None
-        product = Product.objects.create(
-            slug=fake.slug(),
-            title=fake.word().capitalize(),
-            description=fake.text(),
-            unit_price=Decimal(random.uniform(10, 500)).quantize(Decimal('0.01')),
-            inventory=random.randint(1, 100),
-            Collection=coll
-        )
-        if promotions:
-            product.promotions.add(random.choice(promotions))
-        products.append(product)
-    print(f"✅ Created {n} products")
+    for coll in collections:
+        for item in PRODUCT_CATEGORIES[coll.title]:
+            product = Product.objects.create(
+                slug=f"{item.lower().replace(' ', '-')}-{fake.unique.uuid4()}",
+                title=item,
+                description=f"A high-quality {item.lower()} perfect for everyday use.",
+                unit_price=Decimal(random.uniform(20, 1000)).quantize(Decimal('0.01')),
+                inventory=random.randint(5, 50),
+                collection=coll,
+                # If you have image field, uncomment:
+                # image=f"https://picsum.photos/seed/{item.lower()}/400/400"
+            )
+            if promotions:
+                product.promotions.add(random.choice(promotions))
+            products.append(product)
+    print(f"✅ Created {len(products)} products")
     return products
 
 def create_orders(customers, products, n=15):
@@ -88,12 +103,12 @@ def create_orders(customers, products, n=15):
             customer=customer,
             payment_status=random.choice([Order.PENDING, Order.COMPLETE, Order.FAILED])
         )
-        for _ in range(random.randint(1, 5)):
+        for _ in range(random.randint(1, 4)):
             product = random.choice(products)
             OrderItem.objects.create(
                 order=order,
                 product=product,
-                quantity=random.randint(1, 3),
+                quantity=min(random.randint(1, 3), product.inventory),
                 unit_price=product.unit_price
             )
         orders.append(order)
@@ -108,15 +123,15 @@ def create_carts(products, n=5):
             CartItem.objects.create(
                 cart=cart,
                 product=product,
-                quantity=random.randint(1, 5)
+                quantity=min(random.randint(1, 5), product.inventory)
             )
     print(f"✅ Created {n} carts with items")
 
 def run():
     customers = create_customers(10)
     promotions = create_promotions(5)
-    collections = create_collections(3)
-    products = create_products(20, promotions, collections)
+    collections = create_collections()
+    products = create_products(promotions, collections)
     create_orders(customers, products, 15)
     create_carts(products, 5)
     print("🎯 Seeding complete!")
