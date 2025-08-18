@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from decimal import Decimal
+
 from .models import*
 
 class CollectionSerializer(serializers.ModelSerializer):
@@ -9,12 +11,17 @@ class CollectionSerializer(serializers.ModelSerializer):
 class ProductsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ['id','title','unit_price', 'price_with_tax', 'collection' ]
+        fields = ['id','title','description', 'slug', 'inventory','unit_price', 'price_with_tax', 'collection' ]
       
-    collection = CollectionSerializer()
+    collection = CollectionSerializer(read_only=True)
     price_with_tax = serializers.SerializerMethodField(method_name='calculate_tax')
     
     def calculate_tax(self, product: Product):
-        return product.unit_price*2
+        return round(Decimal(product.unit_price) * Decimal('1.1'), 2)
 
+
+class CollectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Collection
+        fields = ['title', 'featured_product']
         
